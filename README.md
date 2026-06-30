@@ -1,0 +1,118 @@
+# memory-mcp
+
+A personal cross-LLM memory layer. Markdown files are the source of truth.
+The server exposes them as MCP tools so Claude, ChatGPT, Cursor, Mistral, etc.
+can read, search, and update memories — no cold start in any new chat.
+
+## Layout
+
+```
+memory/
+  MEMORY.md            # always-loaded index, one line per memory
+  identity.md          # who you are
+  project-*.md         # one per active project
+  preferences-*.md     # one per preference cluster
+  ref-*.md             # external resources / how-tos
+server.py              # mcp-use server (HTTP)
+pyproject.toml         # uv-managed deps
+.env.example           # MEMORY_TOKEN, HOST, PORT, MEMORY_DIR
+```
+
+Each memory file has YAML frontmatter:
+
+```yaml
+---
+id: identity
+type: identity            # identity | project | preference | reference | fact
+scope: global             # global | project:<name> | session
+description: Who I am, role, focus
+created: 2026-05-06
+updated: 2026-05-06
+tags: [profile]
+# archived: true         # set to hide from default search
+---
+```
+
+## Run locally
+
+```bash
+cp .env.example .env
+python -c "import secrets; print(secrets.token_urlsafe(32))"  # paste into MEMORY_TOKEN
+uv run python server.py
+```
+
+The Inspector is at `http://127.0.0.1:3333/` while the server is running —
+use it to call tools manually before hooking up an LLM.
+
+## Tools
+
+- `list_memories(type?, scope?, include_archived?)`
+- `read_memory(id_or_path)`
+- `search_memories(query, type?, scope?, max_results?)`
+- `write_memory(path, content)` — content must start with `---` frontmatter
+- `delete_memory(id_or_path)`
+
+## Connecting clients
+
+### Claude Desktop / Claude Code (local, via tailnet or localhost)
+
+`~/.config/claude-desktop/claude_desktop_config.json` (or via UI):
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "type": "http",
+      "url": "http://127.0.0.1:3333/mcp",
+      "headers": { "Authorization": "Bearer YOUR_TOKEN_HERE" }
+    }
+  }
+}
+```
+
+Replace `127.0.0.1` with the Tailscale name (`memory.tailXXXX.ts.net`) when
+connecting from a different machine on the tailnet.
+
+### Cursor / Windsurf / Cline
+
+Same shape — most clients accept an `mcpServers` block with `url` and
+`headers`. Check the client's docs for the exact path.
+
+## Exposing publicly with Tailscale Funnel
+
+For ChatGPT.com, Claude.ai web, and Mistral Le Chat — these connect from the
+provider's backend, not your tailnet. You need a public HTTPS URL.
+
+On the host running `server.py` (e.g. the Vaio):
+
+```bash
+# 1. Have Tailscale installed and HTTPS enabled in the admin panel
+sudo tailscale up
+sudo tailscale set --advertise-routes=  # not needed, just check status
+
+# 2. Bind the server to localhost (default in .env), then publish:
+tailscale funnel --bg 3333
+
+# 3. Note the public URL printed, e.g.:
+#    https://memory.tail-scale-name.ts.net
+```
+
+Then in **ChatGPT** (Pro/Team/Enterprise → Settings → Connectors → Add):
+- Server URL: `https://memory.tail-scale-name.ts.net/mcp`
+- Auth: bearer token, paste `MEMORY_TOKEN`
+
+Same in **Claude.ai** (Pro+ → Settings → Connectors).
+
+## Security
+
+- The bearer token is the only thing between the public Funnel URL and your
+  memories. Treat it like a password.
+- Don't commit `.env`. The `.gitignore` excludes it.
+- Rotate the token by generating a new one and updating each connector.
+
+## Known limits
+
+- No embeddings — search is substring-based. Fine for personal-scale; add a
+  sidecar SQLite + embeddings later if needed.
+- No write review queue — the LLM can write directly. Watch the index.
+- No multi-user. This is a single-tenant server.
