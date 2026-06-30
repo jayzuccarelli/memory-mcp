@@ -36,10 +36,19 @@ tags: [profile]
 ## Run locally
 
 ```bash
+# 1. Seed the memory directory from the templates
+cp -r memory.example memory
+
+# 2. Generate a bearer token and drop it in .env
 cp .env.example .env
 python -c "import secrets; print(secrets.token_urlsafe(32))"  # paste into MEMORY_TOKEN
+
+# 3. Start the server
 uv run python server.py
 ```
+
+`memory/` is gitignored — your real memories never leave the host.
+`memory.example/` is the template set; edit copies in `memory/` instead.
 
 The Inspector is at `http://127.0.0.1:3333/` while the server is running —
 use it to call tools manually before hooking up an LLM.
