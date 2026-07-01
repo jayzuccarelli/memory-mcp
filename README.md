@@ -33,25 +33,31 @@ tags: [profile]
 ---
 ```
 
-## Run locally
+## Quickstart
 
 ```bash
-# 1. Seed the memory directory from the templates
+# 1. Install deps (uv installs Python + all packages; https://docs.astral.sh/uv)
+uv sync
+
+# 2. Seed your memory directory from the templates.
+#    memory/ is gitignored — your real memories never leave the host.
 cp -r memory.example memory
 
-# 2. Generate a bearer token and drop it in .env
+# 3. Create your .env from the example.
 cp .env.example .env
-python -c "import secrets; print(secrets.token_urlsafe(32))"  # paste into MEMORY_TOKEN
 
-# 3. Start the server
+# 4. Generate a bearer token.
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+#    Copy the output and paste it into .env as:
+#        MEMORY_TOKEN=<paste>
+
+# 5. Start the server.
 uv run python server.py
+#    Listens on http://127.0.0.1:3333/mcp
 ```
 
-`memory/` is gitignored — your real memories never leave the host.
-`memory.example/` is the template set; edit copies in `memory/` instead.
-
-The Inspector is at `http://127.0.0.1:3333/` while the server is running —
-use it to call tools manually before hooking up an LLM.
+The Inspector at `http://127.0.0.1:3333/` lets you call tools manually while
+the server is running.
 
 ## Tools
 
@@ -61,75 +67,70 @@ use it to call tools manually before hooking up an LLM.
 - `write_memory(path, content)` — content must start with `---` frontmatter
 - `delete_memory(id_or_path)`
 
-## Connecting clients
+## Connect a client
 
-### Claude Code (CLI, any machine)
+Pick the URL that matches where the client runs relative to the server:
 
-One line, using the CLI installed by Claude Code:
+| Setup | URL |
+|---|---|
+| Client on the same machine as the server | `http://127.0.0.1:3333/mcp` |
+| Client on your LAN or tailnet | `http://<host>:3333/mcp` |
+| ChatGPT.com / Claude.ai web / Mistral Le Chat | public HTTPS URL (see [Public exposure](#public-exposure)) |
+
+The `<TOKEN>` below is the `MEMORY_TOKEN` you generated in step 4.
+
+### Claude Code
 
 ```bash
 claude mcp add --transport http -s user memory <URL> \
   -H "Authorization: Bearer <TOKEN>"
+claude mcp list        # expect: "memory · Connected"
 ```
-
-- `<URL>` is `http://127.0.0.1:3333/mcp` on the host, or your public/tailnet
-  URL from anywhere else (see "Exposing publicly with Tailscale Funnel"
-  below — e.g. `https://<host>.<tailnet>.ts.net:8443/memory/mcp`).
-- `<TOKEN>` is the `MEMORY_TOKEN` you generated into `.env`.
-- `-s user` makes it available in every project on that machine.
-
-Verify:
-
-```bash
-claude mcp list       # should show "memory · Connected"
-```
-
-Or launch a session and type `/mcp`, or ask the model to `call list_memories`.
 
 ### Claude Desktop, Cursor, Windsurf, Cline
 
-Same shape — most clients accept an `mcpServers` block with `url` and
-`headers`. Config file path varies per client; check its docs.
+Add to the client's MCP config (path varies per client):
 
 ```json
 {
   "mcpServers": {
     "memory": {
       "type": "http",
-      "url": "http://127.0.0.1:3333/mcp",
-      "headers": { "Authorization": "Bearer YOUR_TOKEN_HERE" }
+      "url": "<URL>",
+      "headers": { "Authorization": "Bearer <TOKEN>" }
     }
   }
 }
 ```
 
-Swap `127.0.0.1` for the tailnet or Funnel host when connecting from another
-machine.
+### ChatGPT / Claude.ai web
 
-## Exposing publicly with Tailscale Funnel
+- **ChatGPT** (Pro/Team/Enterprise → Settings → Connectors → Add)
+- **Claude.ai** (Pro+ → Settings → Connectors → Add)
 
-For ChatGPT.com, Claude.ai web, and Mistral Le Chat — these connect from the
-provider's backend, not your tailnet. You need a public HTTPS URL.
+Both need a **public HTTPS URL** — see below. Paste the URL, choose bearer
+auth, paste `<TOKEN>`.
 
-On the host running `server.py` (e.g. the Vaio):
+## Public exposure
+
+Only needed for ChatGPT.com, Claude.ai web, and Mistral Le Chat — they hit
+the server from the provider's backend, not your network. Skip this section
+if you're only using Claude Code / Desktop / Cursor.
+
+Any HTTPS reverse-proxy works. The simplest option is
+[Tailscale Funnel](https://tailscale.com/kb/1223/funnel):
 
 ```bash
-# 1. Have Tailscale installed and HTTPS enabled in the admin panel
-sudo tailscale up
-sudo tailscale set --advertise-routes=  # not needed, just check status
-
-# 2. Bind the server to localhost (default in .env), then publish:
-tailscale funnel --bg 3333
-
-# 3. Note the public URL printed, e.g.:
-#    https://memory.tail-scale-name.ts.net
+sudo tailscale funnel --bg 3333
 ```
 
-Then in **ChatGPT** (Pro/Team/Enterprise → Settings → Connectors → Add):
-- Server URL: `https://memory.tail-scale-name.ts.net/mcp`
-- Auth: bearer token, paste `MEMORY_TOKEN`
+That prints a public URL like `https://<host>.<tailnet>.ts.net`. Append
+`/mcp` and use it as `<URL>` in the client config. When the server sits
+behind a proxy that forwards a different Host header, set `TRUST_PROXY=true`
+in `.env` so FastMCP doesn't reject the request.
 
-Same in **Claude.ai** (Pro+ → Settings → Connectors).
+Cloudflare Tunnel, ngrok, or your own domain + nginx + Let's Encrypt work
+equally.
 
 ## Security
 
