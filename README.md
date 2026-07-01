@@ -63,9 +63,33 @@ use it to call tools manually before hooking up an LLM.
 
 ## Connecting clients
 
-### Claude Desktop / Claude Code (local, via tailnet or localhost)
+### Claude Code (CLI, any machine)
 
-`~/.config/claude-desktop/claude_desktop_config.json` (or via UI):
+One line, using the CLI installed by Claude Code:
+
+```bash
+claude mcp add --transport http -s user memory <URL> \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+- `<URL>` is `http://127.0.0.1:3333/mcp` on the host, or your public/tailnet
+  URL from anywhere else (see "Exposing publicly with Tailscale Funnel"
+  below — e.g. `https://<host>.<tailnet>.ts.net:8443/memory/mcp`).
+- `<TOKEN>` is the `MEMORY_TOKEN` you generated into `.env`.
+- `-s user` makes it available in every project on that machine.
+
+Verify:
+
+```bash
+claude mcp list       # should show "memory · Connected"
+```
+
+Or launch a session and type `/mcp`, or ask the model to `call list_memories`.
+
+### Claude Desktop, Cursor, Windsurf, Cline
+
+Same shape — most clients accept an `mcpServers` block with `url` and
+`headers`. Config file path varies per client; check its docs.
 
 ```json
 {
@@ -79,13 +103,8 @@ use it to call tools manually before hooking up an LLM.
 }
 ```
 
-Replace `127.0.0.1` with the Tailscale name (`memory.tailXXXX.ts.net`) when
-connecting from a different machine on the tailnet.
-
-### Cursor / Windsurf / Cline
-
-Same shape — most clients accept an `mcpServers` block with `url` and
-`headers`. Check the client's docs for the exact path.
+Swap `127.0.0.1` for the tailnet or Funnel host when connecting from another
+machine.
 
 ## Exposing publicly with Tailscale Funnel
 
