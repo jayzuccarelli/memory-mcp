@@ -139,6 +139,13 @@ equally.
 - Don't commit `.env`. The `.gitignore` excludes it.
 - Rotate the token by generating a new one and updating each connector.
 
+## Development
+
+```bash
+make check   # ruff lint + format + tool-registry smoke
+make run     # uv run python server.py
+```
+
 ## Known limits
 
 - No embeddings — search is substring-based. Fine for personal-scale; add a
