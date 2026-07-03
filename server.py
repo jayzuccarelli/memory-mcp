@@ -36,6 +36,7 @@ if TRUST_PROXY:
             ct = request.headers.get("content-type", "")
             if not ct.lower().startswith("application/json"):
                 from starlette.responses import Response
+
                 return Response("Invalid Content-Type header", status_code=400)
         return None
 
