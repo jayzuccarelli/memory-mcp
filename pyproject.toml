@@ -1,9 +1,28 @@
 [project]
 name = "memory-mcp"
 version = "0.1.0"
-description = "Add your description here"
+description = "Personal cross-LLM memory layer over MCP — markdown files are the source of truth."
+readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.11"
+authors = [
+    { name = "Jay Zuccarelli", email = "11176606+jayzuccarelli@users.noreply.github.com" },
+]
+keywords = ["mcp", "model-context-protocol", "memory", "llm", "claude", "chatgpt"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
 dependencies = [
     "mcp-use>=1.7.0",
     "python-dotenv>=1.2.2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/jayzuccarelli/memory-mcp"
+Issues = "https://github.com/jayzuccarelli/memory-mcp/issues"
