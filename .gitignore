@@ -12,6 +12,6 @@ wheels/
 # Local secrets
 .env
 
-# Live memory files — personal data; ship memory.example/ instead.
+# Live memory files: personal data; ship memory.example/ instead.
 # On first run, copy memory.example/ to memory/.
 /memory/

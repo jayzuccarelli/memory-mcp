@@ -2,7 +2,7 @@
 
 A personal cross-LLM memory layer. Markdown files are the source of truth.
 The server exposes them as MCP tools so Claude, ChatGPT, Cursor, Mistral, etc.
-can read, search, and update memories — no cold start in any new chat.
+can read, search, and update memories, with no cold start in any new chat.
 
 ## Layout
 
@@ -12,7 +12,7 @@ memory/
   identity.md          # who you are
   project-*.md         # one per active project
   preferences-*.md     # one per preference cluster
-  ref-*.md             # external resources / how-tos
+  reference-*.md       # external resources / how-tos
 server.py              # mcp-use server (HTTP)
 pyproject.toml         # uv-managed deps
 .env.example           # MEMORY_TOKEN, HOST, PORT, MEMORY_DIR
@@ -36,35 +36,41 @@ tags: [profile]
 ## Quickstart
 
 ```bash
-# 1. Install deps (uv installs Python + all packages; https://docs.astral.sh/uv)
+# 1. Install uv if you don't have it (it brings its own Python).
+#    See https://docs.astral.sh/uv for other install methods.
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 2. Install deps.
 uv sync
 
-# 2. Seed your memory directory from the templates.
-#    memory/ is gitignored — your real memories never leave the host.
+# 3. Seed your memory directory from the templates.
+#    memory/ is gitignored, so your real memories never leave the host.
 cp -r memory.example memory
 
-# 3. Create your .env from the example.
+# 4. Create your .env from the example.
 cp .env.example .env
 
-# 4. Generate a bearer token.
-python -c "import secrets; print(secrets.token_urlsafe(32))"
+# 5. Generate a bearer token.
+uv run python -c "import secrets; print(secrets.token_urlsafe(32))"
 #    Copy the output and paste it into .env as:
 #        MEMORY_TOKEN=<paste>
 
-# 5. Start the server.
+# 6. Start the server.
 uv run python server.py
 #    Listens on http://127.0.0.1:3333/mcp
 ```
 
-The Inspector at `http://127.0.0.1:3333/` lets you call tools manually while
-the server is running.
+The server speaks MCP over streamable HTTP at `/mcp` and does not serve a
+browser UI. To poke at the tools by hand, point the
+[MCP Inspector](https://github.com/modelcontextprotocol/inspector) at
+`http://127.0.0.1:3333/mcp` with your bearer token.
 
 ## Tools
 
 - `list_memories(type?, scope?, include_archived?)`
 - `read_memory(id_or_path)`
 - `search_memories(query, type?, scope?, max_results?)`
-- `write_memory(path, content)` — content must start with `---` frontmatter
+- `write_memory(path, content)`, where content must start with `---` frontmatter
 - `delete_memory(id_or_path)`
 
 ## Connect a client
@@ -77,7 +83,7 @@ Pick the URL that matches where the client runs relative to the server:
 | Client on your LAN or tailnet | `http://<host>:3333/mcp` |
 | ChatGPT.com / Claude.ai web / Mistral Le Chat | public HTTPS URL (see [Public exposure](#public-exposure)) |
 
-The `<TOKEN>` below is the `MEMORY_TOKEN` you generated in step 4.
+The `<TOKEN>` below is the `MEMORY_TOKEN` you generated in step 5.
 
 ### Claude Code
 
@@ -108,12 +114,12 @@ Add to the client's MCP config (path varies per client):
 - **ChatGPT** (Pro/Team/Enterprise → Settings → Connectors → Add)
 - **Claude.ai** (Pro+ → Settings → Connectors → Add)
 
-Both need a **public HTTPS URL** — see below. Paste the URL, choose bearer
+Both need a **public HTTPS URL**, see below. Paste the URL, choose bearer
 auth, paste `<TOKEN>`.
 
 ## Public exposure
 
-Only needed for ChatGPT.com, Claude.ai web, and Mistral Le Chat — they hit
+Only needed for ChatGPT.com, Claude.ai web, and Mistral Le Chat, which hit
 the server from the provider's backend, not your network. Skip this section
 if you're only using Claude Code / Desktop / Cursor.
 
@@ -148,7 +154,7 @@ make run     # uv run python server.py
 
 ## Known limits
 
-- No embeddings — search is substring-based. Fine for personal-scale; add a
+- No embeddings: search is substring-based. Fine for personal-scale; add a
   sidecar SQLite + embeddings later if needed.
-- No write review queue — the LLM can write directly. Watch the index.
+- No write review queue: the LLM can write directly. Watch the index.
 - No multi-user. This is a single-tenant server.
