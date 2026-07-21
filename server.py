@@ -251,6 +251,5 @@ if __name__ == "__main__":
         print("WARNING: MEMORY_TOKEN unset. Server will accept unauthenticated calls.")
         print("Set MEMORY_TOKEN in .env before exposing via Tailscale Funnel.")
     print(f"memory dir: {MEMORY_DIR}")
-    print(f"listening:  http://{HOST}:{PORT}")
-    print(f"inspector:  http://{HOST}:{PORT}/")
+    print(f"listening:  http://{HOST}:{PORT}/mcp")
     server.run(transport="streamable-http")

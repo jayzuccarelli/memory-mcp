@@ -2,7 +2,7 @@
 id: project-example
 type: project
 scope: global
-description: One-line summary of an active project: what it is and why it matters
+description: One-line summary of an active project, what it is and why it matters
 created: 2026-06-30
 updated: 2026-06-30
 tags: [example]

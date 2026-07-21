@@ -40,6 +40,10 @@ tags: [profile]
 #    See https://docs.astral.sh/uv for other install methods.
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
+#    uv installs to ~/.local/bin, which your current shell may not have on
+#    PATH yet. This makes it visible without opening a new terminal.
+source $HOME/.local/bin/env
+
 # 2. Install deps.
 uv sync
 
@@ -60,8 +64,9 @@ uv run python server.py
 #    Listens on http://127.0.0.1:3333/mcp
 ```
 
-The server speaks MCP over streamable HTTP at `/mcp` and does not serve a
-browser UI. To poke at the tools by hand, point the
+The server speaks MCP over streamable HTTP at `/mcp`. It serves no browser UI
+unless you start it with `DEBUG=1`, which enables mcp-use's built-in inspector
+at `/inspector`. To poke at the tools by hand, point the
 [MCP Inspector](https://github.com/modelcontextprotocol/inspector) at
 `http://127.0.0.1:3333/mcp` with your bearer token.
 
@@ -114,7 +119,7 @@ Add to the client's MCP config (path varies per client):
 - **ChatGPT** (Pro/Team/Enterprise → Settings → Connectors → Add)
 - **Claude.ai** (Pro+ → Settings → Connectors → Add)
 
-Both need a **public HTTPS URL**, see below. Paste the URL, choose bearer
+Both need a **public HTTPS URL**; see below. Paste the URL, choose bearer
 auth, paste `<TOKEN>`.
 
 ## Public exposure
