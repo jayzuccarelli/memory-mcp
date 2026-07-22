@@ -95,8 +95,9 @@ server = MCPServer(
     version="0.1.0",
     instructions=(
         "Personal cross-LLM memory. The file MEMORY.md is the index — read it "
-        "first to discover what's available. Use search_memories for fuzzy "
-        "lookups, read_memory to load a specific file in full. When you learn "
+        "first to discover what's available. Use search_memories for "
+        "case-insensitive substring lookups (not semantic search), and "
+        "read_memory to load a specific file in full. When you learn "
         "something durable about the user, write it with write_memory using "
         "the schema shown in any existing memory file."
     ),
