@@ -8,53 +8,27 @@ additionalContext, so every session begins already holding it.
 Stdlib only — it runs on client machines that never cloned this repo.
 Fails open: if the server is down or slow, the session starts as normal.
 
-Config (env, or ~/.claude/settings.json "env" block):
-    MEMORY_MCP_URL     e.g. https://host.ts.net:8443/memory/mcp
-    MEMORY_MCP_TOKEN   bearer token
-    MEMORY_MCP_TIMEOUT seconds, default 5
+Configured by /memory:setup, which writes ~/.config/memory-mcp/config.json.
+See lib/config.py for the full resolution order.
 """
 
 from __future__ import annotations
 
 import json
-import os
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-ENV_FILE = Path(os.environ.get("MEMORY_MCP_ENV_FILE", "~/.memory-mcp.env")).expanduser()
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 
+from config import PROTOCOL_VERSION, load_config  # noqa: E402
 
-def _config(key: str, default: str = "") -> str:
-    """Read config from the environment, falling back to ~/.memory-mcp.env.
-
-    The env file lets the token live in a chmod-600 file instead of a shell
-    profile or settings.json, which is often checked into a dotfiles repo.
-    Accepts `KEY=value` and `export KEY="value"`.
-    """
-    if key in os.environ:
-        return os.environ[key]
-    if not ENV_FILE.is_file():
-        return default
-    for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
-        line = line.strip().removeprefix("export ").strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        k, _, v = line.partition("=")
-        if k.strip() == key:
-            return v.strip().strip("'\"")
-    return default
-
-
-# Populated by main(), inside the fail-open boundary — reading the env file can
-# raise, and a hook that crashes on a malformed config is a hook that breaks
-# every session.
+# Populated by main(), inside the fail-open boundary.
 URL = ""
 TOKEN = ""
 TIMEOUT = 5.0
 
-PROTOCOL_VERSION = "2025-06-18"
 # Claude Code truncates hook output at 10k characters, silently: the session
 # starts, the tail of the index is simply gone. Verified by injecting 23k and
 # watching a marker at the end disappear. Stay well under it.
@@ -204,13 +178,8 @@ def render(rows: list[dict]) -> str:
 
 def main() -> int:
     global URL, TOKEN, TIMEOUT
-    try:
-        URL = _config("MEMORY_MCP_URL")
-        TOKEN = _config("MEMORY_MCP_TOKEN")
-        TIMEOUT = float(_config("MEMORY_MCP_TIMEOUT", "5"))
-    except (OSError, ValueError) as e:
-        print(json.dumps({"systemMessage": f"memory-mcp config unreadable ({e})"}))
-        return 0
+    cfg = load_config()
+    URL, TOKEN, TIMEOUT = cfg.url, cfg.token, cfg.timeout
     if not URL:
         return 0  # not configured — stay silent
     try:

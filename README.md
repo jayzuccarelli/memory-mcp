@@ -14,8 +14,12 @@ memory/
   preferences-*.md     # one per preference cluster
   ref-*.md             # external resources / how-tos
 server.py              # mcp-use server (HTTP)
-plugin/                # Claude Code plugin — MCP config + SessionStart hook
-  .mcp.json
+plugin/                # Claude Code plugin — install this on each machine
+  .mcp.json            # registers the stdio proxy below
+  bin/proxy.py         # bridges Claude Code to the HTTP server
+  bin/setup.py         # writes the config from one connection string
+  lib/config.py        # shared config, read by both halves
+  commands/setup.md    # the /memory:setup slash command
   hooks/session_start.py
 .claude-plugin/        # marketplace manifest, so the repo is installable
 pyproject.toml         # uv-managed deps
@@ -69,8 +73,17 @@ grep -q '^MEMORY_TOKEN=.\+' .env || \
 
 # 6. Start the server.
 uv run python server.py
-#    Listens on http://127.0.0.1:3333/mcp
 ```
+
+On startup it prints the line you need to connect a client:
+
+```
+Connect a client by running this in Claude Code:
+  /memory:setup memory://SGVsbG8...@127.0.0.1:3333/mcp
+```
+
+That one string carries both the address and the token. If the server is
+behind a proxy or tunnel, swap the host for the public one.
 
 The Inspector at `http://127.0.0.1:3333/` lets you call tools manually while
 the server is running.
@@ -144,51 +157,36 @@ reach for that instead — it will answer from local memory and never touch
 this server. You have to tell it. Pick the strongest option your client
 supports:
 
-**Claude Code — install the plugin.** It ships both halves: the MCP server
-connection *and* a `SessionStart` hook that injects your memory index into
+**Claude Code — install the plugin.** It ships both halves: the connection to
+your server *and* a `SessionStart` hook that injects your memory index into
 every session. The hook is deterministic — it runs whether or not the model
 feels like calling a tool.
 
-Set the two env vars in your shell profile, then install:
-
-```bash
-# ~/.zshrc or ~/.bashrc
-export MEMORY_MCP_URL="<URL>"
-export MEMORY_MCP_TOKEN="<TOKEN>"
-```
+Three lines, nothing to edit by hand:
 
 ```
 /plugin marketplace add jayzuccarelli/memory-mcp
 /plugin install memory@memory-mcp
+/memory:setup <the memory:// string your server printed>
 ```
 
-That's it. No `claude mcp add`, no editing `settings.json`. Verify with
-`/mcp` (expect `memory` connected) and by asking a fresh session what
-memories it has — it should answer without calling a tool, because the
-index is already in context.
+Then `/reload-plugins`. Verify with `/mcp` (expect `memory` connected) and by
+asking a fresh session what memories it has — it should answer without calling
+a tool, because the index is already in context.
 
-**Repeat this on every machine you work from.** The server runs in one
-place; the plugin is the client half and is installed per machine. Once
-two machines are set up they read and write the same memories, so
-something you tell Claude on your laptop is there on your desktop.
+**Repeat this on every machine you work from.** The server runs in one place;
+the plugin is the client half and is installed per machine. Once two machines
+are set up they read and write the same memories, so something you tell Claude
+on your laptop is there on your desktop.
 
-If you'd rather keep the token out of your shell profile, put it in a
-`chmod 600` file instead — the hook reads this when the env vars are unset:
+`/memory:setup` writes `~/.config/memory-mcp/config.json` with owner-only
+permissions. Nothing goes into your shell profile and nothing goes into
+`settings.json`, which is commonly symlinked into a public dotfiles repo. If
+you prefer, `MEMORY_MCP_URL` and `MEMORY_MCP_TOKEN` in the environment still
+override the file.
 
-```bash
-umask 077 && cat > ~/.memory-mcp.env <<'EOF'
-export MEMORY_MCP_URL="<URL>"
-export MEMORY_MCP_TOKEN="<TOKEN>"
-EOF
-```
-
-Note that the plugin's `.mcp.json` can only read real env vars, so with the
-file-only approach you'll still need `claude mcp add` for the server
-connection. Don't put the token in `settings.json` — that file is commonly
-symlinked into a dotfiles repo.
-
-The hook fails open. If the server is down or slow, the session starts
-normally with a one-line warning. It never blocks you.
+The hook fails open. If the server is down or slow, the session starts normally
+with a one-line warning. It never blocks you.
 
 **Everything else** (Claude Desktop, Claude.ai, ChatGPT, Cursor) has no hook
 system. Paste the block from [Instructions for agents](#instructions-for-agents)
@@ -285,11 +283,11 @@ make run     # uv run python server.py
 make hook    # print what the SessionStart hook would inject
 ```
 
-`make hook` needs a running server plus `MEMORY_MCP_URL` and
-`MEMORY_MCP_TOKEN`, either exported in the environment or set in
-`~/.memory-mcp.env`. Use it to confirm the hook reaches the server; the hook
-itself is registered by the plugin via `plugin/hooks/hooks.json`, not by
-editing `settings.json`.
+`make hook` needs a running server and a configured client — either
+`/memory:setup` already run, or `MEMORY_MCP_URL` and `MEMORY_MCP_TOKEN` in the
+environment. Use it to confirm the hook reaches the server. The hook is
+registered by the plugin via `plugin/hooks/hooks.json`; you never edit
+`settings.json`.
 
 ## Known limits
 
