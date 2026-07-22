@@ -47,11 +47,21 @@ def _config(key: str, default: str = "") -> str:
     return default
 
 
-URL = _config("MEMORY_MCP_URL")
-TOKEN = _config("MEMORY_MCP_TOKEN")
-TIMEOUT = float(_config("MEMORY_MCP_TIMEOUT", "5"))
+# Populated by main(), inside the fail-open boundary — reading the env file can
+# raise, and a hook that crashes on a malformed config is a hook that breaks
+# every session.
+URL = ""
+TOKEN = ""
+TIMEOUT = 5.0
 
 PROTOCOL_VERSION = "2025-06-18"
+# Claude Code truncates hook output at 10k characters, silently: the session
+# starts, the tail of the index is simply gone. Verified by injecting 23k and
+# watching a marker at the end disappear. Stay well under it.
+CONTEXT_BUDGET = 9000
+# A memory store shouldn't return megabytes, but don't let a wrong URL or a
+# broken server buffer without limit.
+MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 
 
 def _post(payload: dict, session_id: str | None) -> tuple[dict | None, str | None]:
@@ -71,7 +81,10 @@ def _post(payload: dict, session_id: str | None) -> tuple[dict | None, str | Non
     )
     with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
         sid = resp.headers.get("mcp-session-id") or session_id
-        raw = resp.read().decode("utf-8", "replace")
+        body = resp.read(MAX_RESPONSE_BYTES + 1)
+        if len(body) > MAX_RESPONSE_BYTES:
+            raise RuntimeError("response too large")
+        raw = body.decode("utf-8", "replace")
 
     if not raw.strip():
         return None, sid
@@ -146,15 +159,54 @@ def render(rows: list[dict]) -> str:
         "memory, and do not maintain a parallel one.",
         "",
     ]
+    head = "\n".join(lines)
+    budget = CONTEXT_BUDGET - len(head)
+
+    def _id(r: dict) -> str:
+        return r.get("id") or r.get("path", "?")
+
+    detailed = [
+        f"- **{_id(r)}**"
+        + (
+            f" ({m})"
+            if (m := " ".join(x for x in (r.get("type", ""), r.get("scope", "")) if x))
+            else ""
+        )
+        + f" — {r.get('description', '').strip()}"
+        for r in rows
+    ]
+    body = "\n".join(detailed)
+    if len(body) <= budget:
+        return head + body
+
+    # Descriptions don't fit. Ids alone are still worth having — the model can
+    # see what exists and read_memory the ones it needs — so degrade to a bare
+    # list rather than silently dropping the tail.
+    note = (
+        "Descriptions omitted to fit the context budget. Call `list_memories` "
+        "for ids with descriptions.\n\n"
+    )
+    budget -= len(note)
+    compact, used = [], 0
     for r in rows:
-        rid = r.get("id") or r.get("path", "?")
-        desc = r.get("description", "").strip()
-        meta = " ".join(x for x in (r.get("type", ""), r.get("scope", "")) if x)
-        lines.append(f"- **{rid}**{f' ({meta})' if meta else ''} — {desc}")
-    return "\n".join(lines)
+        entry = f"- {_id(r)}"
+        if used + len(entry) + 1 > budget:
+            compact.append(f"- ...and {len(rows) - len(compact)} more")
+            break
+        compact.append(entry)
+        used += len(entry) + 1
+    return head + note + "\n".join(compact)
 
 
 def main() -> int:
+    global URL, TOKEN, TIMEOUT
+    try:
+        URL = _config("MEMORY_MCP_URL")
+        TOKEN = _config("MEMORY_MCP_TOKEN")
+        TIMEOUT = float(_config("MEMORY_MCP_TIMEOUT", "5"))
+    except (OSError, ValueError) as e:
+        print(json.dumps({"systemMessage": f"memory-mcp config unreadable ({e})"}))
+        return 0
     if not URL:
         return 0  # not configured — stay silent
     try:
