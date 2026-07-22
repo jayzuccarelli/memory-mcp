@@ -43,6 +43,10 @@ This runs the server on one machine. Every client you connect later — Claude
 Code on your laptop, ChatGPT, Claude Desktop — talks to this one server, which
 is the point: one memory, many machines.
 
+It binds to `127.0.0.1` by default, so only that machine can reach it. To use
+it from a second machine, set `HOST=0.0.0.0` in `.env` for LAN/tailnet access,
+or put it behind HTTPS as described in [Public exposure](#public-exposure).
+
 ```bash
 # 1. Get the code.
 git clone https://github.com/jayzuccarelli/memory-mcp.git
@@ -58,8 +62,10 @@ cp -r memory.example memory
 # 4. Create your .env from the example.
 cp .env.example .env
 
-# 5. Generate a bearer token and write it into .env.
-uv run python -c "import secrets; print('MEMORY_TOKEN=' + secrets.token_urlsafe(32))" >> .env
+# 5. Generate a bearer token and write it into .env. Safe to skip if you
+#    already have one — this refuses to append a second.
+grep -q '^MEMORY_TOKEN=.\+' .env || \
+  uv run python -c "import secrets; print('MEMORY_TOKEN=' + secrets.token_urlsafe(32))" >> .env
 
 # 6. Start the server.
 uv run python server.py
