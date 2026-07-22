@@ -19,6 +19,7 @@ Always fails open. A memory server that is down must never block a write.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import urllib.error
 from pathlib import Path
@@ -35,12 +36,28 @@ REDIRECT_MESSAGE = (
 )
 
 
+def _auto_memory_root() -> Path:
+    """Claude Code's auto-memory lives under <config>/projects/<slug>/memory/."""
+    base = os.environ.get("CLAUDE_CONFIG_DIR") or str(Path.home() / ".claude")
+    return (Path(base) / "projects").resolve()
+
+
 def is_memory_file(path: str) -> bool:
-    """Claude Code keeps its memories in a 'memory' directory as markdown."""
-    if not path.endswith(".md"):
+    """True only for Claude Code auto-memory markdown, not any dir named memory.
+
+    A repo's own docs/memory/*.md or a project-local memory/*.md must never be
+    mirrored to personal memory, so match the real auto-memory location:
+    <config>/projects/<slug>/memory/<name>.md.
+    """
+    if not path.endswith(".md") or Path(path).name == "MEMORY.md":
         return False
-    parts = Path(path).parts
-    return "memory" in parts and Path(path).name != "MEMORY.md"
+    try:
+        resolved = Path(path).resolve()
+        rel = resolved.relative_to(_auto_memory_root())
+    except (ValueError, OSError):
+        return False
+    # <slug>/memory/<name>.md  ->  parts are (slug, "memory", name)
+    return len(rel.parts) == 3 and rel.parts[1] == "memory"
 
 
 def emit(payload: dict) -> None:
@@ -65,6 +82,16 @@ def main() -> int:
 
     if cfg.write_mode == "redirect":
         if event != "PreToolUse":
+            return 0
+        # Only deny if the server is actually reachable — otherwise the local
+        # write is blocked AND the redirected write_memory can't land, which
+        # would lose a memory. A down server must let the local write stand.
+        try:
+            Client(cfg, "memory-redirect-hook").handshake()
+        except (urllib.error.URLError, OSError, ValueError, RuntimeError) as e:
+            emit(
+                {"systemMessage": f"memory-mcp unreachable, keeping local write ({e})"}
+            )
             return 0
         emit(
             {
