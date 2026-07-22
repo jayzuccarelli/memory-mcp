@@ -17,106 +17,17 @@ from __future__ import annotations
 import json
 import sys
 import urllib.error
-import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 
-from config import PROTOCOL_VERSION, load_config  # noqa: E402
-
-# Populated by main(), inside the fail-open boundary.
-URL = ""
-TOKEN = ""
-TIMEOUT = 5.0
+from client import Client  # noqa: E402
+from config import load_config  # noqa: E402
 
 # Claude Code truncates hook output at 10k characters, silently: the session
 # starts, the tail of the index is simply gone. Verified by injecting 23k and
 # watching a marker at the end disappear. Stay well under it.
 CONTEXT_BUDGET = 9000
-# A memory store shouldn't return megabytes, but don't let a wrong URL or a
-# broken server buffer without limit.
-MAX_RESPONSE_BYTES = 4 * 1024 * 1024
-
-
-def _post(payload: dict, session_id: str | None) -> tuple[dict | None, str | None]:
-    """POST one JSON-RPC message. Returns (parsed result envelope, session id)."""
-    headers = {
-        "Content-Type": "application/json",
-        # Streamable HTTP servers may answer with either; accept both.
-        "Accept": "application/json, text/event-stream",
-    }
-    if TOKEN:
-        headers["Authorization"] = f"Bearer {TOKEN}"
-    if session_id:
-        headers["mcp-session-id"] = session_id
-
-    req = urllib.request.Request(
-        URL, data=json.dumps(payload).encode(), headers=headers, method="POST"
-    )
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-        sid = resp.headers.get("mcp-session-id") or session_id
-        body = resp.read(MAX_RESPONSE_BYTES + 1)
-        if len(body) > MAX_RESPONSE_BYTES:
-            raise RuntimeError("response too large")
-        raw = body.decode("utf-8", "replace")
-
-    if not raw.strip():
-        return None, sid
-    # SSE frames arrive as repeated "data: {...}" lines; take the last one.
-    # Check every line, not just the first: a stream may open with a comment,
-    # an `id:`, or a `retry:` line before the first data frame.
-    if any(ln.startswith("data:") for ln in raw.splitlines()):
-        chunks = [ln[5:].strip() for ln in raw.splitlines() if ln.startswith("data:")]
-        raw = chunks[-1] if chunks else ""
-        if not raw:
-            return None, sid
-    return json.loads(raw), sid
-
-
-def fetch_index() -> list[dict]:
-    init, sid = _post(
-        {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": PROTOCOL_VERSION,
-                "capabilities": {},
-                "clientInfo": {"name": "memory-session-start-hook", "version": "1"},
-            },
-        },
-        None,
-    )
-    if init is None or "error" in init:
-        raise RuntimeError(f"initialize failed: {init}")
-
-    _post({"jsonrpc": "2.0", "method": "notifications/initialized"}, sid)
-
-    called, _ = _post(
-        {
-            "jsonrpc": "2.0",
-            "id": 2,
-            "method": "tools/call",
-            "params": {"name": "list_memories", "arguments": {}},
-        },
-        sid,
-    )
-    if called is None or "error" in called:
-        raise RuntimeError(f"list_memories failed: {called}")
-
-    result = called.get("result", {})
-    if result.get("isError"):
-        raise RuntimeError("list_memories returned isError")
-
-    # FastMCP emits one content block per list item, not one JSON array.
-    rows = []
-    for block in result.get("content", []):
-        text = block.get("text")
-        if not text:
-            continue
-        parsed = json.loads(text)
-        rows.extend(parsed) if isinstance(parsed, list) else rows.append(parsed)
-    return rows
 
 
 def render(rows: list[dict]) -> str:
@@ -177,26 +88,19 @@ def render(rows: list[dict]) -> str:
 
 
 def main() -> int:
-    global URL, TOKEN, TIMEOUT
     cfg = load_config()
-    URL, TOKEN, TIMEOUT = cfg.url, cfg.token, cfg.timeout
-    if not URL:
+    if not cfg.url:
         return 0  # not configured — stay silent
     try:
-        rows = fetch_index()
-    except (
-        urllib.error.URLError,
-        urllib.error.HTTPError,
-        OSError,
-        ValueError,
-        RuntimeError,
-    ) as e:
+        client = Client(cfg, "memory-session-start-hook")
+        client.handshake()
+        rows = Client.rows(client.call("list_memories", {}))
+    except (urllib.error.URLError, OSError, ValueError, RuntimeError) as e:
         # Never block a session on the memory server. Warn the human, not the model.
         print(
             json.dumps(
                 {"systemMessage": f"memory-mcp unreachable, no memory loaded ({e})"}
-            ),
-            file=sys.stdout,
+            )
         )
         return 0
     if not rows:
