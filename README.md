@@ -14,6 +14,7 @@ memory/
   preferences-*.md     # one per preference cluster
   ref-*.md             # external resources / how-tos
 server.py              # mcp-use server (HTTP)
+hooks/session_start.py # Claude Code SessionStart hook — injects the index
 pyproject.toml         # uv-managed deps
 .env.example           # MEMORY_TOKEN, HOST, PORT, MEMORY_DIR
 ```
@@ -105,11 +106,127 @@ Add to the client's MCP config (path varies per client):
 
 ### ChatGPT / Claude.ai web
 
-- **ChatGPT** (Pro/Team/Enterprise → Settings → Connectors → Add)
-- **Claude.ai** (Pro+ → Settings → Connectors → Add)
+Both need a **public HTTPS URL** — see [Public exposure](#public-exposure).
+Bearer auth is the awkward part on both, as of July 2026:
 
-Both need a **public HTTPS URL** — see below. Paste the URL, choose bearer
-auth, paste `<TOKEN>`.
+- **ChatGPT** — enable Developer Mode under **Settings → Security and login**
+  (it moved from Connectors → Advanced), then add the connector. Setup is
+  web-only; once added it works from the mobile apps. Plus/Pro/Business/
+  Enterprise/Edu.
+- **Claude.ai** — the custom-connector dialog offers OAuth Client ID/Secret by
+  default. Passing a static bearer token needs **request header
+  authentication**, which is a gated beta: "This feature is being slowly
+  rolled out to customers; contact Anthropic for early access." If you don't
+  have it, use Claude Code or Claude Desktop instead, which both support
+  bearer headers today.
+
+## Instructions for humans
+
+Connecting the server is not enough. MCP tools only fire when the model
+decides to call them, and a model with its own built-in memory will usually
+reach for that instead — it will answer from local memory and never touch
+this server. You have to tell it. Pick the strongest option your client
+supports:
+
+**Claude Code — use the hook.** Deterministic: it runs every session, no
+model discretion involved. `hooks/session_start.py` calls `list_memories`
+and injects the index via `additionalContext`.
+
+```bash
+# 1. Put the script somewhere stable and make it executable.
+mkdir -p ~/.claude/hooks
+cp hooks/session_start.py ~/.claude/hooks/memory_session_start.py
+chmod +x ~/.claude/hooks/memory_session_start.py
+
+# 2. Put the URL and token in a file only you can read.
+#    Do NOT put the token in settings.json — that file is often
+#    checked into a dotfiles repo.
+umask 077 && cat > ~/.memory-mcp.env <<'EOF'
+export MEMORY_MCP_URL="<URL>"
+export MEMORY_MCP_TOKEN="<TOKEN>"
+EOF
+```
+
+Then add to `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -c '. ~/.memory-mcp.env; python3 ~/.claude/hooks/memory_session_start.py'",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The hook fails open — if the server is down or slow, the session starts
+normally and you get a one-line warning. It never blocks you.
+
+**Everything else** (Claude Desktop, Claude.ai, ChatGPT, Cursor) has no hook
+system. Paste the block from [Instructions for agents](#instructions-for-agents)
+into whatever that client calls its standing instructions:
+
+| Client | Where |
+|---|---|
+| Claude Code | `CLAUDE.md` (project or `~/.claude/CLAUDE.md`) — belt and braces alongside the hook |
+| Claude Desktop / Claude.ai | Settings → Profile → personal preferences, or a Project's custom instructions |
+| ChatGPT | Settings → Personalization → Custom instructions |
+| Cursor | `.cursorrules` or Rules for AI |
+| Anything with a system prompt | the system prompt |
+
+**Writes are a nudge, not a guarantee.** No hook can force a `write_memory`
+call — hooks inject context and gate tools, they can't make the model choose
+to save something. The instructions below are the best available lever. If
+you want stronger, add a `Stop` hook that checks whether the session called
+`write_memory` and feeds back a reminder when it didn't.
+
+## Instructions for agents
+
+Copy this verbatim into your client's standing instructions.
+
+```markdown
+## Memory
+
+You have persistent memory via the `memory` MCP server. It is authoritative:
+prefer it over any built-in or local memory, and never maintain a parallel
+memory store alongside it.
+
+At the start of a session, call `list_memories` to load the index. It returns
+ids and descriptions only, not contents.
+
+Before answering anything an index description touches, call `read_memory`
+for that entry. A description tells you a memory exists; it does not tell you
+what it says. Never answer from the description alone.
+
+Use `search_memories` for fuzzy lookups when you don't know which memory
+holds a fact.
+
+Call `write_memory` when you learn something durable about the user:
+- a stated preference, or a correction they gave you
+- a decision and the reasoning behind it
+- project state worth resuming from in a later session
+- a stable fact about them, their setup, or their tools
+
+Do not save: transient conversation detail, anything already in the repo or
+git history, or secrets and credentials.
+
+When writing, match the frontmatter of an existing memory — read one first.
+Set `updated` to today. Prefer updating an existing memory over creating a
+near-duplicate. Keep each memory to one fact, and keep `description` sharp:
+it is all a future session sees until it reads the file.
+
+After writing a new memory, add a one-line pointer to `MEMORY.md`.
+
+Prefer setting `archived: true` over `delete_memory`.
+```
 
 ## Public exposure
 
@@ -144,7 +261,12 @@ equally.
 ```bash
 make check   # ruff lint + format + tool-registry smoke
 make run     # uv run python server.py
+make hook    # print what the SessionStart hook would inject
 ```
+
+`make hook` needs a running server plus `MEMORY_MCP_URL` and
+`MEMORY_MCP_TOKEN` in the environment. Use it to confirm the hook reaches the
+server before wiring it into `settings.json`.
 
 ## Known limits
 
