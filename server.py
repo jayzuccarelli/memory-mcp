@@ -6,6 +6,7 @@ Exposes list/read/search/write/delete tools over streamable-http.
 
 from __future__ import annotations
 
+import base64
 import os
 import re
 from datetime import date
@@ -247,11 +248,28 @@ async def delete_memory(id_or_path: str) -> dict:
     return {"path": str(target.relative_to(MEMORY_DIR)), "action": "deleted"}
 
 
+def connection_string(host: str | None = None) -> str:
+    """One string a user can copy, instead of a URL and a token to keep apart.
+
+    The token is base64url-encoded so an '@' or '/' inside it can't split the
+    string at the wrong place. This prints the local address; behind a proxy,
+    substitute the public host.
+    """
+    token = base64.urlsafe_b64encode((MEMORY_TOKEN or "").encode()).decode().rstrip("=")
+    endpoint = host or f"http://{HOST}:{PORT}"
+    return f"memory://{token}@{endpoint.rstrip('/')}/mcp"
+
+
 if __name__ == "__main__":
     if not MEMORY_TOKEN:
         print("WARNING: MEMORY_TOKEN unset — server will accept unauthenticated calls.")
         print("Set MEMORY_TOKEN in .env before exposing via Tailscale Funnel.")
     print(f"memory dir: {MEMORY_DIR}")
+    if MEMORY_TOKEN:
+        print()
+        print("Connect a client by running this in Claude Code:")
+        print(f"  /memory:setup {connection_string()}")
+        print()
     print(f"listening:  http://{HOST}:{PORT}")
     print(f"inspector:  http://{HOST}:{PORT}/")
     server.run(transport="streamable-http")

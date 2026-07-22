@@ -1,11 +1,8 @@
 {
   "mcpServers": {
     "memory": {
-      "type": "http",
-      "url": "${MEMORY_MCP_URL}",
-      "headers": {
-        "Authorization": "Bearer ${MEMORY_MCP_TOKEN}"
-      }
+      "command": "python3",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/bin/proxy.py"]
     }
   }
 }
