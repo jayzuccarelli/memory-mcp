@@ -39,23 +39,29 @@ tags: [profile]
 
 ## Quickstart
 
+This runs the server on one machine. Every client you connect later — Claude
+Code on your laptop, ChatGPT, Claude Desktop — talks to this one server, which
+is the point: one memory, many machines.
+
 ```bash
-# 1. Install deps (uv installs Python + all packages; https://docs.astral.sh/uv)
+# 1. Get the code.
+git clone https://github.com/jayzuccarelli/memory-mcp.git
+cd memory-mcp
+
+# 2. Install deps (uv installs Python + all packages; https://docs.astral.sh/uv)
 uv sync
 
-# 2. Seed your memory directory from the templates.
+# 3. Seed your memory directory from the templates.
 #    memory/ is gitignored — your real memories never leave the host.
 cp -r memory.example memory
 
-# 3. Create your .env from the example.
+# 4. Create your .env from the example.
 cp .env.example .env
 
-# 4. Generate a bearer token.
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-#    Copy the output and paste it into .env as:
-#        MEMORY_TOKEN=<paste>
+# 5. Generate a bearer token and write it into .env.
+uv run python -c "import secrets; print('MEMORY_TOKEN=' + secrets.token_urlsafe(32))" >> .env
 
-# 5. Start the server.
+# 6. Start the server.
 uv run python server.py
 #    Listens on http://127.0.0.1:3333/mcp
 ```
@@ -153,6 +159,11 @@ That's it. No `claude mcp add`, no editing `settings.json`. Verify with
 `/mcp` (expect `memory` connected) and by asking a fresh session what
 memories it has — it should answer without calling a tool, because the
 index is already in context.
+
+**Repeat this on every machine you work from.** The server runs in one
+place; the plugin is the client half and is installed per machine. Once
+two machines are set up they read and write the same memories, so
+something you tell Claude on your laptop is there on your desktop.
 
 If you'd rather keep the token out of your shell profile, put it in a
 `chmod 600` file instead — the hook reads this when the env vars are unset:
