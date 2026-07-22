@@ -1,7 +1,7 @@
 {
   "name": "memory",
   "description": "Persistent cross-LLM memory. Connects to your memory-mcp server and injects the memory index at the start of every session.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "jayzuccarelli"
   },
