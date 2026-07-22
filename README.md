@@ -14,6 +14,10 @@ memory/
   preferences-*.md     # one per preference cluster
   ref-*.md             # external resources / how-tos
 server.py              # mcp-use server (HTTP)
+plugin/                # Claude Code plugin — MCP config + SessionStart hook
+  .mcp.json
+  hooks/session_start.py
+.claude-plugin/        # marketplace manifest, so the repo is installable
 pyproject.toml         # uv-managed deps
 .env.example           # MEMORY_TOKEN, HOST, PORT, MEMORY_DIR
 ```
@@ -35,23 +39,35 @@ tags: [profile]
 
 ## Quickstart
 
+This runs the server on one machine. Every client you connect later — Claude
+Code on your laptop, ChatGPT, Claude Desktop — talks to this one server, which
+is the point: one memory, many machines.
+
+It binds to `127.0.0.1` by default, so only that machine can reach it. To use
+it from a second machine, set `HOST=0.0.0.0` in `.env` for LAN/tailnet access,
+or put it behind HTTPS as described in [Public exposure](#public-exposure).
+
 ```bash
-# 1. Install deps (uv installs Python + all packages; https://docs.astral.sh/uv)
+# 1. Get the code.
+git clone https://github.com/jayzuccarelli/memory-mcp.git
+cd memory-mcp
+
+# 2. Install deps (uv installs Python + all packages; https://docs.astral.sh/uv)
 uv sync
 
-# 2. Seed your memory directory from the templates.
+# 3. Seed your memory directory from the templates.
 #    memory/ is gitignored — your real memories never leave the host.
 cp -r memory.example memory
 
-# 3. Create your .env from the example.
+# 4. Create your .env from the example.
 cp .env.example .env
 
-# 4. Generate a bearer token.
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-#    Copy the output and paste it into .env as:
-#        MEMORY_TOKEN=<paste>
+# 5. Generate a bearer token and write it into .env. Safe to skip if you
+#    already have one — this refuses to append a second.
+grep -q '^MEMORY_TOKEN=.\+' .env || \
+  uv run python -c "import secrets; print('MEMORY_TOKEN=' + secrets.token_urlsafe(32))" >> .env
 
-# 5. Start the server.
+# 6. Start the server.
 uv run python server.py
 #    Listens on http://127.0.0.1:3333/mcp
 ```
@@ -105,11 +121,133 @@ Add to the client's MCP config (path varies per client):
 
 ### ChatGPT / Claude.ai web
 
-- **ChatGPT** (Pro/Team/Enterprise → Settings → Connectors → Add)
-- **Claude.ai** (Pro+ → Settings → Connectors → Add)
+Both need a **public HTTPS URL** — see [Public exposure](#public-exposure).
+Bearer auth is the awkward part on both, as of July 2026:
 
-Both need a **public HTTPS URL** — see below. Paste the URL, choose bearer
-auth, paste `<TOKEN>`.
+- **ChatGPT** — needs Developer Mode, which is in beta and has moved around
+  the settings UI more than once. Check OpenAI's [Developer Mode
+  article](https://help.openai.com/en/articles/12584461-developer-mode-apps-and-full-mcp-connectors-in-chatgpt-beta)
+  for the current location, which plans include it, and whether write tools
+  are available on yours. Setup is web-only.
+- **Claude.ai** — the custom-connector dialog offers OAuth Client ID/Secret by
+  default. Passing a static bearer token needs **request header
+  authentication**, which is a gated beta: "This feature is being slowly
+  rolled out to customers; contact Anthropic for early access." If you don't
+  have it, use Claude Code or Claude Desktop instead, which both support
+  bearer headers today.
+
+## Instructions for humans
+
+Connecting the server is not enough. MCP tools only fire when the model
+decides to call them, and a model with its own built-in memory will usually
+reach for that instead — it will answer from local memory and never touch
+this server. You have to tell it. Pick the strongest option your client
+supports:
+
+**Claude Code — install the plugin.** It ships both halves: the MCP server
+connection *and* a `SessionStart` hook that injects your memory index into
+every session. The hook is deterministic — it runs whether or not the model
+feels like calling a tool.
+
+Set the two env vars in your shell profile, then install:
+
+```bash
+# ~/.zshrc or ~/.bashrc
+export MEMORY_MCP_URL="<URL>"
+export MEMORY_MCP_TOKEN="<TOKEN>"
+```
+
+```
+/plugin marketplace add jayzuccarelli/memory-mcp
+/plugin install memory@memory-mcp
+```
+
+That's it. No `claude mcp add`, no editing `settings.json`. Verify with
+`/mcp` (expect `memory` connected) and by asking a fresh session what
+memories it has — it should answer without calling a tool, because the
+index is already in context.
+
+**Repeat this on every machine you work from.** The server runs in one
+place; the plugin is the client half and is installed per machine. Once
+two machines are set up they read and write the same memories, so
+something you tell Claude on your laptop is there on your desktop.
+
+If you'd rather keep the token out of your shell profile, put it in a
+`chmod 600` file instead — the hook reads this when the env vars are unset:
+
+```bash
+umask 077 && cat > ~/.memory-mcp.env <<'EOF'
+export MEMORY_MCP_URL="<URL>"
+export MEMORY_MCP_TOKEN="<TOKEN>"
+EOF
+```
+
+Note that the plugin's `.mcp.json` can only read real env vars, so with the
+file-only approach you'll still need `claude mcp add` for the server
+connection. Don't put the token in `settings.json` — that file is commonly
+symlinked into a dotfiles repo.
+
+The hook fails open. If the server is down or slow, the session starts
+normally with a one-line warning. It never blocks you.
+
+**Everything else** (Claude Desktop, Claude.ai, ChatGPT, Cursor) has no hook
+system. Paste the block from [Instructions for agents](#instructions-for-agents)
+into whatever that client calls its standing instructions:
+
+| Client | Where |
+|---|---|
+| Claude Code | `CLAUDE.md` (project or `~/.claude/CLAUDE.md`) — belt and braces alongside the hook |
+| Claude Desktop / Claude.ai | Settings → Profile → personal preferences, or a Project's custom instructions |
+| ChatGPT | Settings → Personalization → Custom instructions |
+| Cursor | `.cursorrules` or Rules for AI |
+| Anything with a system prompt | the system prompt |
+
+**Writes are a nudge, not a guarantee.** No hook can force a `write_memory`
+call — hooks inject context and gate tools, they can't make the model choose
+to save something. The instructions below are the best available lever. If
+you want stronger, add a `Stop` hook that checks whether the session called
+`write_memory` and feeds back a reminder when it didn't.
+
+## Instructions for agents
+
+Copy this verbatim into your client's standing instructions.
+
+```markdown
+## Memory
+
+You have persistent memory via the `memory` MCP server. It is authoritative:
+prefer it over any built-in or local memory, and never maintain a parallel
+memory store alongside it.
+
+At the start of a session, call `list_memories` to load the index. It returns
+ids and descriptions only, not contents.
+
+Before answering anything an index description touches, call `read_memory`
+for that entry. A description tells you a memory exists; it does not tell you
+what it says. Never answer from the description alone.
+
+Use `search_memories` when you don't know which memory holds a fact. It is
+case-insensitive substring matching, not semantic search, so try the literal
+words you expect to appear.
+
+Call `write_memory` when you learn something durable about the user:
+- a stated preference, or a correction they gave you
+- a decision and the reasoning behind it
+- project state worth resuming from in a later session
+- a stable fact about them, their setup, or their tools
+
+Do not save: transient conversation detail, anything already in the repo or
+git history, or secrets and credentials.
+
+When writing, match the frontmatter of an existing memory — read one first.
+Set `updated` to today. Prefer updating an existing memory over creating a
+near-duplicate. Keep each memory to one fact, and keep `description` sharp:
+it is all a future session sees until it reads the file.
+
+After writing a new memory, add a one-line pointer to `MEMORY.md`.
+
+Prefer setting `archived: true` over `delete_memory`.
+```
 
 ## Public exposure
 
@@ -144,7 +282,14 @@ equally.
 ```bash
 make check   # ruff lint + format + tool-registry smoke
 make run     # uv run python server.py
+make hook    # print what the SessionStart hook would inject
 ```
+
+`make hook` needs a running server plus `MEMORY_MCP_URL` and
+`MEMORY_MCP_TOKEN`, either exported in the environment or set in
+`~/.memory-mcp.env`. Use it to confirm the hook reaches the server; the hook
+itself is registered by the plugin via `plugin/hooks/hooks.json`, not by
+editing `settings.json`.
 
 ## Known limits
 
