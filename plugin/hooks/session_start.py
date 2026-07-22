@@ -21,10 +21,35 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 
-URL = os.environ.get("MEMORY_MCP_URL", "")
-TOKEN = os.environ.get("MEMORY_MCP_TOKEN", "")
-TIMEOUT = float(os.environ.get("MEMORY_MCP_TIMEOUT", "5"))
+ENV_FILE = Path(os.environ.get("MEMORY_MCP_ENV_FILE", "~/.memory-mcp.env")).expanduser()
+
+
+def _config(key: str, default: str = "") -> str:
+    """Read config from the environment, falling back to ~/.memory-mcp.env.
+
+    The env file lets the token live in a chmod-600 file instead of a shell
+    profile or settings.json, which is often checked into a dotfiles repo.
+    Accepts `KEY=value` and `export KEY="value"`.
+    """
+    if key in os.environ:
+        return os.environ[key]
+    if not ENV_FILE.is_file():
+        return default
+    for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+        line = line.strip().removeprefix("export ").strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        if k.strip() == key:
+            return v.strip().strip("'\"")
+    return default
+
+
+URL = _config("MEMORY_MCP_URL")
+TOKEN = _config("MEMORY_MCP_TOKEN")
+TIMEOUT = float(_config("MEMORY_MCP_TIMEOUT", "5"))
 
 PROTOCOL_VERSION = "2025-06-18"
 
@@ -151,7 +176,20 @@ def main() -> int:
         return 0
     if not rows:
         return 0
-    print(json.dumps({"additionalContext": render(rows), "suppressOutput": True}))
+    # Must be nested under hookSpecificOutput. A top-level "additionalContext"
+    # key is accepted and then silently dropped — the hook runs, the context
+    # never lands.
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "SessionStart",
+                    "additionalContext": render(rows),
+                },
+                "suppressOutput": True,
+            }
+        )
+    )
     return 0
 
 
