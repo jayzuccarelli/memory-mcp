@@ -27,11 +27,18 @@ LEGACY_ENV = Path(
 ).expanduser()
 
 
+VALID_WRITE_MODES = ("mirror", "redirect", "off")
+
+
 @dataclass
 class Config:
     url: str = ""
     token: str = ""
     timeout: float = 5.0
+    # What to do when Claude Code writes to its own local memory directory.
+    # mirror: copy it to the server too. redirect: block it, server only.
+    # off: ignore local writes entirely.
+    write_mode: str = "mirror"
 
 
 def _from_json() -> dict[str, str]:
@@ -78,10 +85,15 @@ def load_config() -> Config:
     except ValueError:
         timeout = 5.0
 
+    mode = (pick("MEMORY_MCP_WRITE_MODE", "write_mode") or "mirror").lower()
+    if mode not in VALID_WRITE_MODES:
+        mode = "mirror"
+
     return Config(
         url=pick("MEMORY_MCP_URL", "url"),
         token=pick("MEMORY_MCP_TOKEN", "token"),
         timeout=timeout,
+        write_mode=mode,
     )
 
 
