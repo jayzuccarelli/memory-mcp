@@ -37,6 +37,24 @@ tags: [profile]
 ---
 ```
 
+`id` and `type` may also arrive as `name` and a nested `metadata.type`, which is
+how Claude Code writes its own memory files — the server reads either shape, so
+you can point `MEMORY_DIR` straight at an existing Claude Code memory directory.
+Ids are matched with `-` and `_` treated as equivalent, since Claude Code
+hyphenates the id but underscores the filename.
+
+### Keeping a memory off the wire
+
+Mark it `scope: private`. Those files are invisible to every tool — not listed,
+not searchable, not readable, not writable, not deletable — and the server
+reports them as missing rather than as forbidden, so their existence doesn't
+leak either. Set `SERVE_PRIVATE=true` in `.env` to serve them anyway, which you
+should only do on a server that isn't publicly reachable.
+
+This is a deny-list on purpose: everything is served by default and you opt
+individual memories out. An allow-list would leave the store empty and the
+whole thing pointless.
+
 ## Quickstart
 
 ```bash
