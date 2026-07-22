@@ -25,13 +25,18 @@ from config import load_config, save_config  # noqa: E402
 
 
 def parse_connection_string(s: str) -> tuple[str, str]:
-    """memory://<token>@host/path -> (https url, token)."""
+    """memory://<b64 token>@<endpoint> -> (url, token).
+
+    The endpoint carries its own scheme. A local server listens over plain
+    HTTP, so assuming https here would save an endpoint that can never
+    connect — the scheme has to travel with the string, not be guessed.
+    """
     if not s.startswith("memory://"):
         raise ValueError("connection string must start with memory://")
     rest = s[len("memory://") :]
     if "@" not in rest:
         raise ValueError("connection string is missing the token")
-    token_part, _, hostpart = rest.partition("@")
+    token_part, _, endpoint = rest.partition("@")
     token = token_part
     # Tokens are emitted base64url-encoded so a '@' or '/' inside one can't
     # split the string in the wrong place.
@@ -42,12 +47,20 @@ def parse_connection_string(s: str) -> tuple[str, str]:
             token = decoded
     except Exception:
         pass
-    if not hostpart:
-        raise ValueError("connection string is missing the host")
-    split = urlsplit("//" + hostpart, scheme="https")
-    path = split.path or "/mcp"
-    url = urlunsplit(("https", split.netloc, path, "", ""))
-    return url, token
+    if not endpoint:
+        raise ValueError("connection string is missing the server address")
+    if "://" not in endpoint:
+        # Older strings omitted the scheme. https is the safe default for a
+        # remote host; loopback is only ever reachable over http.
+        host = urlsplit("//" + endpoint).hostname or ""
+        scheme = "http" if host in ("127.0.0.1", "localhost", "::1") else "https"
+        endpoint = f"{scheme}://{endpoint}"
+    split = urlsplit(endpoint)
+    if split.scheme not in ("http", "https"):
+        raise ValueError(f"unsupported scheme: {split.scheme}")
+    if not split.netloc:
+        raise ValueError("connection string is missing the server address")
+    return urlunsplit((split.scheme, split.netloc, split.path or "/mcp", "", "")), token
 
 
 def main(argv: list[str]) -> int:

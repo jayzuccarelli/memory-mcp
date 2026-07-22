@@ -256,7 +256,8 @@ def connection_string(host: str | None = None) -> str:
     substitute the public host.
     """
     token = base64.urlsafe_b64encode((MEMORY_TOKEN or "").encode()).decode().rstrip("=")
-    return f"memory://{token}@{host or f'{HOST}:{PORT}'}/mcp"
+    endpoint = host or f"http://{HOST}:{PORT}"
+    return f"memory://{token}@{endpoint.rstrip('/')}/mcp"
 
 
 if __name__ == "__main__":

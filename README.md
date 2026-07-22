@@ -79,11 +79,12 @@ On startup it prints the line you need to connect a client:
 
 ```
 Connect a client by running this in Claude Code:
-  /memory:setup memory://SGVsbG8...@127.0.0.1:3333/mcp
+  /memory:setup memory://SGVsbG8...@http://127.0.0.1:3333/mcp
 ```
 
-That one string carries both the address and the token. If the server is
-behind a proxy or tunnel, swap the host for the public one.
+That one string carries the address and the token together. If the server sits
+behind a proxy or tunnel, swap in the public endpoint, scheme included:
+`memory://<same-token>@https://your-host/mcp`.
 
 The Inspector at `http://127.0.0.1:3333/` lets you call tools manually while
 the server is running.
