@@ -89,7 +89,9 @@ def _post(payload: dict, session_id: str | None) -> tuple[dict | None, str | Non
     if not raw.strip():
         return None, sid
     # SSE frames arrive as repeated "data: {...}" lines; take the last one.
-    if raw.lstrip().startswith("event:") or "data:" in raw.split("\n", 1)[0]:
+    # Check every line, not just the first: a stream may open with a comment,
+    # an `id:`, or a `retry:` line before the first data frame.
+    if any(ln.startswith("data:") for ln in raw.splitlines()):
         chunks = [ln[5:].strip() for ln in raw.splitlines() if ln.startswith("data:")]
         raw = chunks[-1] if chunks else ""
         if not raw:
