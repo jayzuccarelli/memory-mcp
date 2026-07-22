@@ -18,7 +18,9 @@ plugin/                # Claude Code plugin — install this on each machine
   .mcp.json            # registers the stdio proxy below
   bin/proxy.py         # bridges Claude Code to the HTTP server
   bin/setup.py         # writes the config from one connection string
-  lib/config.py        # shared config, read by both halves
+  lib/config.py        # shared config, read by every part
+  lib/client.py        # minimal MCP client shared by the hooks
+  hooks/mirror_write.py  # keeps local memory writes in sync with the server
   commands/setup.md    # the /memory:setup slash command
   hooks/session_start.py
 .claude-plugin/        # marketplace manifest, so the repo is installable
@@ -201,11 +203,31 @@ into whatever that client calls its standing instructions:
 | Cursor | `.cursorrules` or Rules for AI |
 | Anything with a system prompt | the system prompt |
 
-**Writes are a nudge, not a guarantee.** No hook can force a `write_memory`
-call — hooks inject context and gate tools, they can't make the model choose
-to save something. The instructions below are the best available lever. If
-you want stronger, add a `Stop` hook that checks whether the session called
-`write_memory` and feeds back a reminder when it didn't.
+### Writes, and the two-store problem
+
+Claude Code has its own file-based memory. Left alone, "remember this" lands in
+whichever store the model reaches for, the two drift apart, and the memory you
+saved on your laptop isn't on your desktop — which is the whole thing this is
+supposed to fix.
+
+The plugin closes that with a hook on local memory writes. Set `write_mode` in
+`~/.config/memory-mcp/config.json`:
+
+| mode | Claude Code saves a memory locally | model calls `write_memory` |
+|---|---|---|
+| `mirror` *(default)* | saved locally **and** copied to the server | goes to the server |
+| `redirect` | blocked, with a message telling it to use the server | goes to the server |
+| `off` | stays local, server never sees it | goes to the server |
+
+`mirror` keeps both stores working and is the safe default. `redirect` makes the
+server the only store, which is stricter but overrides a built-in Claude Code
+feature. `off` is the pre-plugin behavior.
+
+The hook fails open in every mode: if the server is unreachable your local write
+still succeeds, and you get a one-line warning.
+
+Other clients have no hook system, so for those the instructions below are the
+only lever.
 
 ## Instructions for agents
 
