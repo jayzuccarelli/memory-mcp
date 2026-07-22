@@ -124,10 +124,11 @@ Add to the client's MCP config (path varies per client):
 Both need a **public HTTPS URL** — see [Public exposure](#public-exposure).
 Bearer auth is the awkward part on both, as of July 2026:
 
-- **ChatGPT** — enable Developer Mode under **Settings → Security and login**
-  (it moved from Connectors → Advanced), then add the connector. Setup is
-  web-only; once added it works from the mobile apps. Plus/Pro/Business/
-  Enterprise/Edu.
+- **ChatGPT** — needs Developer Mode, which is in beta and has moved around
+  the settings UI more than once. Check OpenAI's [Developer Mode
+  article](https://help.openai.com/en/articles/12584461-developer-mode-apps-and-full-mcp-connectors-in-chatgpt-beta)
+  for the current location, which plans include it, and whether write tools
+  are available on yours. Setup is web-only.
 - **Claude.ai** — the custom-connector dialog offers OAuth Client ID/Secret by
   default. Passing a static bearer token needs **request header
   authentication**, which is a gated beta: "This feature is being slowly
@@ -225,8 +226,9 @@ Before answering anything an index description touches, call `read_memory`
 for that entry. A description tells you a memory exists; it does not tell you
 what it says. Never answer from the description alone.
 
-Use `search_memories` for fuzzy lookups when you don't know which memory
-holds a fact.
+Use `search_memories` when you don't know which memory holds a fact. It is
+case-insensitive substring matching, not semantic search, so try the literal
+words you expect to appear.
 
 Call `write_memory` when you learn something durable about the user:
 - a stated preference, or a correction they gave you
@@ -284,8 +286,10 @@ make hook    # print what the SessionStart hook would inject
 ```
 
 `make hook` needs a running server plus `MEMORY_MCP_URL` and
-`MEMORY_MCP_TOKEN` in the environment. Use it to confirm the hook reaches the
-server before wiring it into `settings.json`.
+`MEMORY_MCP_TOKEN`, either exported in the environment or set in
+`~/.memory-mcp.env`. Use it to confirm the hook reaches the server; the hook
+itself is registered by the plugin via `plugin/hooks/hooks.json`, not by
+editing `settings.json`.
 
 ## Known limits
 

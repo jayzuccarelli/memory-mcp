@@ -26,6 +26,6 @@ run:
 	uv run python server.py
 
 # Print what the SessionStart hook would inject. Needs a running server and
-# MEMORY_MCP_URL / MEMORY_MCP_TOKEN in the environment.
+# MEMORY_MCP_URL / MEMORY_MCP_TOKEN in the environment or ~/.memory-mcp.env.
 hook:
 	python3 plugin/hooks/session_start.py
