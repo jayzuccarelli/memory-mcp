@@ -74,6 +74,14 @@ class Client:
         if init is None or "error" in init:
             raise RuntimeError(f"initialize failed: {init}")
         self._post({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        # Every real MCP client lists tools before calling one, and the server
+        # depends on it: mcp's _get_cached_tool_definition falls back to
+        # `request_handlers[ListToolsRequest](None)` on a cold cache, and
+        # mcp-use's middleware wrapper dereferences `request.params` on that
+        # None. Skipping tools/list made this client the only one that could
+        # trigger it — so the mirror hook failed silently against any freshly
+        # restarted server, until some other client happened to warm the cache.
+        self._post({"jsonrpc": "2.0", "id": 99, "method": "tools/list"})
 
     def call(self, tool: str, arguments: dict) -> dict:
         out = self._post(
