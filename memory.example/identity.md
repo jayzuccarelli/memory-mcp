@@ -11,7 +11,7 @@ tags: [profile]
 # Identity
 
 <!-- Replace with your own details. This file is the first thing an LLM
-     should read on connect — give it enough to skip the cold-start small
+     should read on connect. Give it enough to skip the cold-start small
      talk. Keep it skimmable; link out to deeper files with [[name]]. -->
 
 - Name: <your name>
@@ -26,7 +26,7 @@ tags: [profile]
 
 ## How to work with me
 - <preferred tone, length, level of pushback>
-- <hard rules — e.g. "don't refactor what I didn't ask for">
+- <hard rules, e.g. "don't refactor what I didn't ask for">
 
 ## Related
 - [[preferences-coding]]

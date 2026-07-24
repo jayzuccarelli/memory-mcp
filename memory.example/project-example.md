@@ -2,7 +2,7 @@
 id: project-example
 type: project
 scope: global
-description: One-line summary of an active project — what it is and why it matters
+description: One-line summary of an active project, what it is and why it matters
 created: 2026-06-30
 updated: 2026-06-30
 tags: [example]
@@ -14,7 +14,7 @@ tags: [example]
 <!-- One paragraph: what this is and what "done" looks like. -->
 
 ## Status
-<!-- LIVE | IN PROGRESS | PAUSED | SHIPPED | KILLED — with a date. -->
+<!-- LIVE | IN PROGRESS | PAUSED | SHIPPED | KILLED, with a date. -->
 
 ## Architecture
 <!-- Bullet list of the main components and how they connect.

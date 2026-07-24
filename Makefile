@@ -1,6 +1,6 @@
 .PHONY: check lint smoke run sync hook
 
-# One-shot verifier — lint + import + tool-registry check.
+# One-shot verifier: lint + import + tool-registry check.
 # Run this before shipping any change.
 check: lint smoke
 

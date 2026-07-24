@@ -95,7 +95,7 @@ server = MCPServer(
     name="memory",
     version="0.1.0",
     instructions=(
-        "Personal cross-LLM memory. The file MEMORY.md is the index — read it "
+        "Personal cross-LLM memory. The file MEMORY.md is the index: read it "
         "first to discover what's available. Use search_memories for "
         "case-insensitive substring lookups (not semantic search), and "
         "read_memory to load a specific file in full. When you learn "
@@ -110,7 +110,7 @@ server = MCPServer(
 if TRUST_PROXY:
     # MCPServer.__init__ already built `self.app` and the session manager with
     # FastMCP's auto-locked-down security settings. We override the settings
-    # AND rebuild both — the same pattern mcp-use uses internally when host
+    # AND rebuild both, the same pattern mcp-use uses internally when host
     # changes at runtime (see _apply_dns_rebinding_protection / run()).
     server.settings.transport_security = _ts.TransportSecuritySettings(
         enable_dns_rebinding_protection=False,
@@ -236,7 +236,7 @@ async def write_memory(path: str, content: str) -> dict:
 @server.tool(
     name="delete_memory",
     description=(
-        "Delete a memory file by id or path. Use sparingly — prefer setting "
+        "Delete a memory file by id or path. Use sparingly; prefer setting "
         "'archived: true' in frontmatter via write_memory to preserve history."
     ),
 )
@@ -262,7 +262,7 @@ def connection_string(host: str | None = None) -> str:
 
 if __name__ == "__main__":
     if not MEMORY_TOKEN:
-        print("WARNING: MEMORY_TOKEN unset — server will accept unauthenticated calls.")
+        print("WARNING: MEMORY_TOKEN unset: server will accept unauthenticated calls.")
         print("Set MEMORY_TOKEN in .env before exposing via Tailscale Funnel.")
     print(f"memory dir: {MEMORY_DIR}")
     if MEMORY_TOKEN:
@@ -271,5 +271,8 @@ if __name__ == "__main__":
         print(f"  /memory:setup {connection_string()}")
         print()
     print(f"listening:  http://{HOST}:{PORT}")
-    print(f"inspector:  http://{HOST}:{PORT}/")
+    # No browser UI unless DEBUG is set; mcp-use prints the real inspector URL
+    # itself when it is. Advertising one at / was simply wrong: / returns 404.
+    if os.environ.get("DEBUG"):
+        print(f"inspector:  http://{HOST}:{PORT}/inspector")
     server.run(transport="streamable-http")

@@ -10,7 +10,7 @@ tags: [example]
 
 # Reference: example
 
-<!-- References point at things that live OUTSIDE this memory store —
+<!-- References point at things that live OUTSIDE this memory store:
      Linear projects, Slack channels, dashboards, internal wikis, runbooks.
      The LLM uses them to know where to look, not as a copy of the content. -->
 
