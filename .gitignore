@@ -9,8 +9,11 @@ wheels/
 # Virtual environments
 .venv
 
-# Local secrets
+# Local secrets. The glob matters: rotating the token invites a `cp .env
+# .env.bak` first, and a bare `.env` rule leaves that backup tracked.
 .env
+.env.*
+!.env.example
 
 # Live memory files — personal data; ship memory.example/ instead.
 # On first run, copy memory.example/ to memory/.
