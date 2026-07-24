@@ -81,7 +81,12 @@ class Client:
         # None. Skipping tools/list made this client the only one that could
         # trigger it — so the mirror hook failed silently against any freshly
         # restarted server, until some other client happened to warm the cache.
-        self._post({"jsonrpc": "2.0", "id": 99, "method": "tools/list"})
+        listed = self._post({"jsonrpc": "2.0", "id": 99, "method": "tools/list"})
+        if listed is None or "error" in listed:
+            # Don't return a "successful" handshake here — the tools/call that
+            # follows would fail for this same reason, and the caller would see
+            # a confusing write error instead of the connection problem.
+            raise RuntimeError(f"tools/list failed: {listed}")
 
     def call(self, tool: str, arguments: dict) -> dict:
         out = self._post(
