@@ -19,7 +19,7 @@ tags: [coding, style]
 - TypeScript when the runtime needs to be Node / Cloudflare / Vercel
 
 ## Style
-- Terse code, minimal comments — only comment the *why*, never the *what*
+- Terse code, minimal comments: only comment the *why*, never the *what*
 - No premature abstractions; three similar lines beat a half-baked helper
 - No backwards-compat shims when you can just change the code
 
