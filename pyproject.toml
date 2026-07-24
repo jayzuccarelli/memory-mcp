@@ -26,3 +26,13 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/jayzuccarelli/memory-mcp"
 Issues = "https://github.com/jayzuccarelli/memory-mcp/issues"
+
+[dependency-groups]
+dev = ["ruff==0.16.0"]
+
+[tool.ruff.lint]
+# Ruff's historical default set, stated explicitly. Without this, `make check`
+# passes or fails depending on which rules ruff happens to enable by default
+# the day you run it — 0.14 was green here, 0.16 reported 19 errors on the
+# same unchanged code.
+select = ["E4", "E7", "E9", "F"]

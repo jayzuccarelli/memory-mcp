@@ -8,8 +8,8 @@ sync:
 	uv sync
 
 lint:
-	uv run --with ruff ruff check .
-	uv run --with ruff ruff format --check .
+	uv run --group dev ruff check .
+	uv run --group dev ruff format --check .
 
 # Imports server.py against memory.example/ (no real memories needed)
 # and confirms all 5 tools registered with the MCP server.
