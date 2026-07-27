@@ -36,3 +36,6 @@ dev = ["ruff==0.16.0"]
 # the day you run it — 0.14 was green here, 0.16 reported 19 errors on the
 # same unchanged code.
 select = ["E4", "E7", "E9", "F"]
+
+[tool.uv]
+prerelease = "allow"
