@@ -13,7 +13,7 @@ memory/
   project-*.md         # one per active project
   preferences-*.md     # one per preference cluster
   reference-*.md       # external resources / how-tos
-server.py              # mcp-use server (HTTP)
+server.py              # MCP server (HTTP, official python-sdk v2)
 plugin/                # Claude Code plugin; install this on each machine
   .mcp.json            # registers the stdio proxy below
   bin/proxy.py         # bridges Claude Code to the HTTP server
@@ -97,8 +97,7 @@ behind a proxy or tunnel, swap in the public endpoint, scheme included:
 `memory://<same-token>@https://your-host/mcp`.
 
 The server speaks MCP over streamable HTTP at `/mcp` and serves no browser UI:
-`/` returns 404. Start it with `DEBUG=1` to enable mcp-use's built-in inspector
-at `/inspector`, or point the standalone
+`/` returns 404. Point the standalone
 [MCP Inspector](https://github.com/modelcontextprotocol/inspector) at
 `http://127.0.0.1:3333/mcp` with your bearer token.
 
@@ -293,6 +292,12 @@ Any HTTPS reverse-proxy works. The simplest option is
 ```bash
 sudo tailscale funnel --bg 3333
 ```
+
+Set both proxy knobs in `.env`, then restart the server: `TRUST_PROXY=true`,
+and `PUBLIC_URL` to the public HTTPS origin (e.g.
+`https://your-host.ts.net/mcp`). `PUBLIC_URL` is what the RFC 9728 auth
+metadata advertises; left unset it points clients at the loopback bind
+address, which remote clients that perform auth discovery can't reach.
 
 That prints a public URL like `https://<host>.<tailnet>.ts.net`. Append
 `/mcp` and use it as `<URL>` in the client config. When the server sits

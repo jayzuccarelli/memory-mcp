@@ -13,6 +13,10 @@ from datetime import date
 from pathlib import Path
 
 from dotenv import load_dotenv
+from mcp.server.auth.provider import AccessToken, TokenVerifier
+from mcp.server.auth.settings import AuthSettings
+from mcp.server.mcpserver import MCPServer
+from mcp.server.transport_security import TransportSecuritySettings
 
 load_dotenv()
 
@@ -20,40 +24,24 @@ MEMORY_DIR = Path(os.environ.get("MEMORY_DIR", "memory")).resolve()
 MEMORY_TOKEN = os.environ.get("MEMORY_TOKEN")
 HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "3333"))
+# AuthSettings needs the server's canonical URL (RFC 9728 resource metadata).
+# Behind Tailscale Funnel this is the public https hostname; locally it is
+# just the bind address.
+PUBLIC_URL = os.environ.get("PUBLIC_URL", f"http://{HOST}:{PORT}")
 # When True, accept any Host header. Required when fronting with a reverse
 # proxy (e.g. Tailscale Funnel) that forwards the public hostname. Bearer
 # auth + HTTPS still gate access; DNS rebinding doesn't add meaningful
 # defense in this threat model.
 TRUST_PROXY = os.environ.get("TRUST_PROXY", "false").lower() in ("1", "true", "yes")
 
-# Monkey-patch BEFORE importing mcp-use so the session manager picks up the
-# disabled host check from the start. mcp-use/FastMCP auto-enable DNS-rebinding
-# protection when bound to localhost, which rejects proxied requests.
-if TRUST_PROXY:
-    from mcp.server import transport_security as _ts
-
-    async def _no_host_check(self, request, is_post=False):
-        if is_post:
-            ct = request.headers.get("content-type", "")
-            if not ct.lower().startswith("application/json"):
-                from starlette.responses import Response
-
-                return Response("Invalid Content-Type header", status_code=400)
-        return None
-
-    _ts.TransportSecurityMiddleware.validate_request = _no_host_check
-
-from mcp_use.server import MCPServer  # noqa: E402
-from mcp_use.server.auth import AccessToken, BearerAuthProvider  # noqa: E402
-
 if not MEMORY_DIR.is_dir():
     raise SystemExit(f"MEMORY_DIR does not exist: {MEMORY_DIR}")
 
 
-class TokenAuth(BearerAuthProvider):
+class TokenAuth(TokenVerifier):
     async def verify_token(self, token: str) -> AccessToken | None:
         if MEMORY_TOKEN and token == MEMORY_TOKEN:
-            return AccessToken(token=token, claims={"sub": "owner"})
+            return AccessToken(token=token, client_id="owner", scopes=[])
         return None
 
 
@@ -102,21 +90,14 @@ server = MCPServer(
         "something durable about the user, write it with write_memory using "
         "the schema shown in any existing memory file."
     ),
-    auth=TokenAuth() if MEMORY_TOKEN else None,
-    host=HOST,
-    port=PORT,
-)
-
-if TRUST_PROXY:
-    # MCPServer.__init__ already built `self.app` and the session manager with
-    # FastMCP's auto-locked-down security settings. We override the settings
-    # AND rebuild both, the same pattern mcp-use uses internally when host
-    # changes at runtime (see _apply_dns_rebinding_protection / run()).
-    server.settings.transport_security = _ts.TransportSecuritySettings(
-        enable_dns_rebinding_protection=False,
+    token_verifier=TokenAuth() if MEMORY_TOKEN else None,
+    auth=AuthSettings(
+        issuer_url=PUBLIC_URL,
+        resource_server_url=PUBLIC_URL,
     )
-    server._session_manager = None
-    server.app = server.streamable_http_app()
+    if MEMORY_TOKEN
+    else None,
+)
 
 
 @server.tool(
@@ -271,8 +252,13 @@ if __name__ == "__main__":
         print(f"  /memory:setup {connection_string()}")
         print()
     print(f"listening:  http://{HOST}:{PORT}")
-    # No browser UI unless DEBUG is set; mcp-use prints the real inspector URL
-    # itself when it is. Advertising one at / was simply wrong: / returns 404.
-    if os.environ.get("DEBUG"):
-        print(f"inspector:  http://{HOST}:{PORT}/inspector")
-    server.run(transport="streamable-http")
+    server.run(
+        transport="streamable-http",
+        host=HOST,
+        port=PORT,
+        transport_security=TransportSecuritySettings(
+            enable_dns_rebinding_protection=False,
+        )
+        if TRUST_PROXY
+        else None,
+    )
