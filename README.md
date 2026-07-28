@@ -293,6 +293,12 @@ Any HTTPS reverse-proxy works. The simplest option is
 sudo tailscale funnel --bg 3333
 ```
 
+Set both proxy knobs in `.env`, then restart the server: `TRUST_PROXY=true`,
+and `PUBLIC_URL` to the public HTTPS origin (e.g.
+`https://your-host.ts.net/mcp`). `PUBLIC_URL` is what the RFC 9728 auth
+metadata advertises; left unset it points clients at the loopback bind
+address, which remote clients that perform auth discovery can't reach.
+
 That prints a public URL like `https://<host>.<tailnet>.ts.net`. Append
 `/mcp` and use it as `<URL>` in the client config. When the server sits
 behind a proxy that forwards a different Host header, set `TRUST_PROXY=true`
