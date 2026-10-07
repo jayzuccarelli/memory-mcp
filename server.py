@@ -256,6 +256,9 @@ if __name__ == "__main__":
         transport="streamable-http",
         host=HOST,
         port=PORT,
+        # No sessions (spec 2026-07-28 is sessionless): a restart can't strand
+        # clients holding an old Mcp-Session-Id with 404s.
+        stateless_http=True,
         transport_security=TransportSecuritySettings(
             enable_dns_rebinding_protection=False,
         )
